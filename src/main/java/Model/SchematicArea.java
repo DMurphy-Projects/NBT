@@ -13,7 +13,7 @@ public class SchematicArea {
 
     HashMap<String, Integer> blockPalette = new HashMap<String, Integer>();
     HashMap<Integer, String> blockPaletteInverse = new HashMap<Integer, String>();
-    int[] area;
+    protected int[] area;
     int globalIndex = 0;
 
     public SchematicArea(int x, int y, int z)
@@ -43,16 +43,41 @@ public class SchematicArea {
         return ArrayIndexHelper.flatten(x, y, z, xMax, yMax, zMax);
     }
 
-    public void addBlock(String s, int index)
+    public void setPalette(String s, int index)
     {
+        blockPalette.put(s, index);
+        blockPaletteInverse.put(index, s);
+    }
+
+    public void addPalette(String s)
+    {
+        System.out.println("Added: " + s);
+
         if (!blockPalette.containsKey(s))
         {
             int i = globalIndex++;
             blockPalette.put(s, i);
             blockPaletteInverse.put(i, s);
         }
+    }
 
+    public void addBlock(String s, int index)
+    {
         area[index] = blockPalette.get(s);
+    }
+
+    public void addArea(SchematicArea section, int x, int y ,int z, int w, int h, int l)
+    {
+        for (int i=x;i<w;i++)
+        for (int j=y;j<h;j++)
+        for (int k=z;k<l;k++)
+        {
+            int _i = flatten(i, j, k);
+            String s = section.blockPaletteInverse.get(section.area[_i]);
+
+            addPalette(s);
+            addBlock(s, _i);
+        }
     }
 
     public void addBlock(String s, int x, int y, int z)

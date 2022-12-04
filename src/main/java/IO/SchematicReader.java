@@ -1,6 +1,7 @@
 package IO;
 
 import Model.SchematicArea;
+import dev.dewy.nbt.tags.collection.CompoundTag;
 
 public class SchematicReader {
 
@@ -11,9 +12,14 @@ public class SchematicReader {
                 fileHelper.enclosingSize.getInt("y").getValue(),
                 fileHelper.enclosingSize.getInt("z").getValue()
         );
-        int areaIndex = 0;
 
-        int packing = (int) Math.ceil(Math.log(fileHelper.blockStatePalette.size()) / Math.log(2));
+        for (CompoundTag tag: fileHelper.blockStatePalette)
+        {
+            area.addPalette((String) tag.getValue().get("Name").getValue());
+        }
+
+        int areaIndex = 0;
+        int packing = (int) Math.max(2, Math.ceil(Math.log(fileHelper.blockStatePalette.size()) / Math.log(2)));
         int mask = (1 << packing) - 1;
 
         int offset = 0;
@@ -21,10 +27,9 @@ public class SchematicReader {
         {
             long value = fileHelper.blockStates.get(j);
             int i;
-            for (i=offset;i <= 64-packing;i+=packing)
+            for (i=offset;i <= Math.min(64, fileHelper.totalVolume.getValue() * packing)-packing;i+=packing)
             {
                 long v1 = (value >> i) & mask;
-
                 area.addBlock(fileHelper.blockStatePalette.get((int) v1).getString("Name").getValue(), areaIndex++);
             }
 
