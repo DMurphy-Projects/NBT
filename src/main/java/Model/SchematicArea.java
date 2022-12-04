@@ -5,24 +5,40 @@ import dev.dewy.nbt.tags.collection.CompoundTag;
 import dev.dewy.nbt.tags.collection.ListTag;
 import dev.dewy.nbt.tags.primitive.StringTag;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class SchematicArea {
-    int xMax, yMax, zMax;
+    int xMax, yMax, zMax, totalMax;
 
     HashMap<String, Integer> blockPalette = new HashMap<String, Integer>();
     HashMap<Integer, String> blockPaletteInverse = new HashMap<Integer, String>();
-    protected int[] area;
-    int globalIndex = 0;
+    int globalIndex = 0, packing = 1;
+
+    List<Long> area;
 
     public SchematicArea(int x, int y, int z)
+    {
+        this(x, y, z, new ArrayList<Long>());
+    }
+
+    public SchematicArea(int x, int y, int z, List<Long> a)
     {
         xMax = x;
         yMax = y;
         zMax = z;
 
-        area = new int[xMax * yMax * zMax];
+        totalMax = x * y * z;
+
+        area = a;
+        if (area.size() == 0)
+        {
+            area.add(0l);
+        }
+
+        updatePacking();
     }
 
     public int getHeight()
@@ -40,43 +56,47 @@ public class SchematicArea {
 
     private int flatten(int x, int y, int z)
     {
-        return ArrayIndexHelper.flatten(x, y, z, xMax, yMax, zMax);
+        return ArrayIndexHelper.flatten(x, y, z, xMax, zMax);
     }
 
-    public void setPalette(String s, int index)
+    public void updatePacking()
     {
-        blockPalette.put(s, index);
-        blockPaletteInverse.put(index, s);
+        int newPacking = (int) (Math.max(2, Math.log(blockPalette.size()) / Math.log(2) + 1));
+        if (packing != newPacking)
+        {
+            //todo update packing
+            packing = newPacking;
+        }
     }
 
     public void addPalette(String s)
     {
-        System.out.println("Added: " + s);
-
         if (!blockPalette.containsKey(s))
         {
+            System.out.println("Added: " + s);
+
             int i = globalIndex++;
             blockPalette.put(s, i);
             blockPaletteInverse.put(i, s);
-        }
-    }
 
-    public void addBlock(String s, int index)
-    {
-        area[index] = blockPalette.get(s);
+            updatePacking();
+        }
     }
 
     public void addArea(SchematicArea section, int x, int y ,int z, int w, int h, int l)
     {
-        for (int i=x;i<w;i++)
-        for (int j=y;j<h;j++)
-        for (int k=z;k<l;k++)
+        for (int a=x;a<x+w;a++)
+        for (int b=y;b<y+h;b++)
+        for (int c=z; c<z+l; c++)
         {
-            int _i = flatten(i, j, k);
-            String s = section.blockPaletteInverse.get(section.area[_i]);
+            int pos = section.flatten(a, b, c);
+            int bits = pos * section.packing;
 
-            addPalette(s);
-            addBlock(s, _i);
+            long data = section.readWithPosition(bits / 64, section.packing, bits % 64);
+            String block = section.blockPaletteInverse.get((int)data);
+
+            addPalette(block);
+            addBlock(block, a, b, c);
         }
     }
 
@@ -85,9 +105,68 @@ public class SchematicArea {
         addBlock(s, flatten(x, y, z));
     }
 
+    public void addBlock(String s, int pos)
+    {
+        addBlock(blockPalette.get(s), pos);
+    }
+
+    public void addBlock(long data, int pos)
+    {
+        int bits = pos * packing;
+        writeWithPosition(bits / 64, data, bits % 64);
+    }
+
+    public void writeWithPosition(int baseIndex, long x, int pos)
+    {
+        //writes x starting at pos to the base
+        Long base = area.get(baseIndex);
+        long digits = (long) (Math.log(x) / Math.log(2)) + 1;
+        long mask = (1 << digits) - 1;
+
+        boolean split = (pos + digits) > 64;
+        if (split)
+        {
+            long firstHalfMask = (1 << (64 - pos)) - 1;
+            long secondHalfMask = mask - firstHalfMask;
+
+            if (baseIndex+1 > area.size())
+            {
+                area.add(0l);
+            }
+
+            writeWithPosition(baseIndex, x & firstHalfMask, pos);
+            writeWithPosition(baseIndex+1, (x & secondHalfMask) >> (64 - pos), 0);
+        }
+        else {
+
+            long maskValue = (base >> pos) & mask;
+//            System.out.println(base + ((x - maskValue) << pos));
+            area.set(baseIndex, base + ((x - maskValue) << pos));
+        }
+    }
+
+    public long readWithPosition(int baseIndex, int digits, int pos)
+    {
+        long base = area.get(baseIndex);
+        boolean split = (pos + digits) > 64;
+        if (split)
+        {
+            long l1 = readWithPosition(baseIndex, (64 - pos), pos);
+            int l2Size = (pos + digits) - 64;
+            long l2 = readWithPosition(baseIndex+1, l2Size, 0);
+
+            return (l1 << l2Size) | l2;
+        }
+        else
+        {
+            long mask = (1 << digits) - 1;
+            return (base >> pos) & mask;
+        }
+    }
+
     public int getDataSize()
     {
-        return area.length;
+        return area.size();
     }
 
     public int getPaletteSize()
@@ -95,56 +174,32 @@ public class SchematicArea {
         return blockPalette.size();
     }
 
-    public void print()
-    {
-        for (int i=0;i<area.length;i++)
+    public void print() {
+        System.out.println(String.format("Packing: %s", packing));
+
+        int offset = 0, block = 0;
+        for (int i=0;i<area.size();i++)
         {
-            System.out.println(String.format("%s -> %s : %s", i, area[i], blockPaletteInverse.get(area[i])));
+            while(offset < 64 && block < totalMax) {
+                long data = readWithPosition(i, packing, offset);
+                System.out.println(String.format("%s : %s -> %s", block, data, blockPaletteInverse.get((int)data)));
+
+                offset += packing;
+                block++;
+            }
+
+            offset %= 64;
         }
     }
 
     public long[] createLongArray()
     {
-        int packing = Math.max((int) Math.ceil(Math.log(blockPalette.size()) / Math.log(2)), 2);
-
-        long[] dataList = new long[(int) Math.ceil((xMax * yMax * zMax * packing) / 64d)];
-        int dataListIndex = 0;
-
-        int offset = 0;
-        long data = 0;
-
-        for (int i=0;i<area.length;i++)
+        long[] arr = new long[area.size()];
+        for (int i=0;i<area.size();i++)
         {
-            if (64 - packing >= offset)
-            {
-                data |= ((long)area[i]) << offset;
-                offset += packing;
-
-                if (offset >= 64)
-                {
-                    offset %= 64;
-                    dataList[dataListIndex++] = data;
-                    data = 0;
-                }
-            }
-            else
-            {
-                int first = 64 - offset;
-
-                data |= (((long)area[i]) & (1 << first) - 1) << offset;
-
-                offset = packing - first;
-                dataList[dataListIndex++] = data;
-                data = (((long)area[i]) >> first) & (1 << offset) - 1;
-            }
+            arr[i] = area.get(i);
         }
-
-        if (offset > 0)
-        {
-            dataList[dataListIndex++] = data;
-        }
-
-        return dataList;
+        return arr;
     }
 
     public ListTag<CompoundTag> createBlockStatePalette()
