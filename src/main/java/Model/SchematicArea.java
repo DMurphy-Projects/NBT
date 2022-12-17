@@ -15,7 +15,7 @@ public class SchematicArea {
 
     HashMap<String, Integer> blockPalette = new HashMap<String, Integer>();
     HashMap<Integer, String> blockPaletteInverse = new HashMap<Integer, String>();
-    int globalIndex = 0, packing = 1;
+    int globalIndex = 0, digits = 2;
 
     List<Long> area;
 
@@ -33,12 +33,19 @@ public class SchematicArea {
         totalMax = x * y * z;
 
         area = a;
-        if (area.size() == 0)
-        {
-            area.add(0l);
-        }
+
+        initList(area, totalMax, digits, a.size());
 
         updatePacking();
+    }
+
+    private void initList(List<Long> list, int max, int digits, int existing)
+    {
+        int needed = (int) (Math.ceil((max * digits) / 64d) - existing);
+        for (int i=0;i<needed;i++)
+        {
+            list.add(0L);
+        }
     }
 
     public int getHeight()
@@ -61,11 +68,25 @@ public class SchematicArea {
 
     public void updatePacking()
     {
-        int newPacking = (int) (Math.max(2, Math.log(blockPalette.size()) / Math.log(2) + 1));
-        if (packing != newPacking)
+        int newDigits = (int) (Math.max(2, (Math.log(blockPalette.size()-1) / Math.log(2)) + 1));
+        if (newDigits > digits)
         {
-            //todo update packing
-            packing = newPacking;
+            System.out.println(String.format("Update Packing - %s -> %s, Size: %s", digits, newDigits, blockPalette.size()));
+
+            List<Long> newArea = new ArrayList<Long>();
+            initList(newArea, totalMax, newDigits, 0);
+
+            for (int i=0;i<totalMax;i++)
+            {
+                int readBits = i * digits;
+                long data = readWithPosition(area, readBits / 64, readBits % 64, digits);
+
+                int writeBits = i * newDigits;
+                writeWithPosition(newArea, writeBits / 64, data, writeBits % 64, newDigits);
+            }
+
+            digits = newDigits;
+            area = newArea;
         }
     }
 
@@ -90,9 +111,9 @@ public class SchematicArea {
         for (int c=z; c<z+l; c++)
         {
             int pos = section.flatten(a, b, c);
-            int bits = pos * section.packing;
+            int bits = pos * section.digits;
 
-            long data = section.readWithPosition(bits / 64, section.packing, bits % 64);
+            long data = readWithPosition(section.area, bits / 64, bits % 64, section.digits);
             String block = section.blockPaletteInverse.get((int)data);
 
             addPalette(block);
@@ -112,15 +133,14 @@ public class SchematicArea {
 
     public void addBlock(long data, int pos)
     {
-        int bits = pos * packing;
-        writeWithPosition(bits / 64, data, bits % 64);
+        int bits = pos * digits;
+        writeWithPosition(area, bits / 64, data, bits % 64, digits);
     }
 
-    public void writeWithPosition(int baseIndex, long x, int pos)
+    public void writeWithPosition(List<Long> list, int baseIndex, long x, int pos, int digits)
     {
         //writes x starting at pos to the base
-        Long base = area.get(baseIndex);
-        long digits = (long) (Math.log(x) / Math.log(2)) + 1;
+        Long base = list.get(baseIndex);
         long mask = (1 << digits) - 1;
 
         boolean split = (pos + digits) > 64;
@@ -129,31 +149,26 @@ public class SchematicArea {
             long firstHalfMask = (1 << (64 - pos)) - 1;
             long secondHalfMask = mask - firstHalfMask;
 
-            if (baseIndex+1 > area.size())
-            {
-                area.add(0l);
-            }
-
-            writeWithPosition(baseIndex, x & firstHalfMask, pos);
-            writeWithPosition(baseIndex+1, (x & secondHalfMask) >> (64 - pos), 0);
+            writeWithPosition(list, baseIndex, x & firstHalfMask, pos, 64 - pos);
+            writeWithPosition(list, baseIndex+1, (x & secondHalfMask) >> (64 - pos), 0, digits - (64 - pos));
         }
         else {
 
             long maskValue = (base >> pos) & mask;
 //            System.out.println(base + ((x - maskValue) << pos));
-            area.set(baseIndex, base + ((x - maskValue) << pos));
+            list.set(baseIndex, base + ((x - maskValue) << pos));
         }
     }
 
-    public long readWithPosition(int baseIndex, int digits, int pos)
+    public long readWithPosition(List<Long> list, int baseIndex, int pos, int digits)
     {
-        long base = area.get(baseIndex);
+        long base = list.get(baseIndex);
         boolean split = (pos + digits) > 64;
         if (split)
         {
-            long l1 = readWithPosition(baseIndex, (64 - pos), pos);
+            long l1 = readWithPosition(list, baseIndex, pos, (64 - pos));
             int l2Size = (pos + digits) - 64;
-            long l2 = readWithPosition(baseIndex+1, l2Size, 0);
+            long l2 = readWithPosition(list, baseIndex+1, 0, l2Size);
 
             return (l1 << l2Size) | l2;
         }
@@ -175,20 +190,13 @@ public class SchematicArea {
     }
 
     public void print() {
-        System.out.println(String.format("Packing: %s", packing));
+        System.out.println(String.format("Packing: %s", digits));
 
-        int offset = 0, block = 0;
-        for (int i=0;i<area.size();i++)
+        for (int i=0;i<totalMax;i++)
         {
-            while(offset < 64 && block < totalMax) {
-                long data = readWithPosition(i, packing, offset);
-                System.out.println(String.format("%s : %s -> %s", block, data, blockPaletteInverse.get((int)data)));
-
-                offset += packing;
-                block++;
-            }
-
-            offset %= 64;
+            int bits = (i * digits);
+            long data = readWithPosition(area, bits / 64, bits % 64, digits);
+            System.out.println(String.format("%s : %s -> %s", i, data, blockPaletteInverse.get((int)data)));
         }
     }
 
