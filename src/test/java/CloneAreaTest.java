@@ -42,11 +42,11 @@ public class CloneAreaTest {
     }
 
     public static void main(String[] args) throws IOException {
+
         Nbt nbt = new Nbt();
 
         String inFolder = "C:\\Users\\Dean\\Documents\\sourcetree\\NBT\\src\\main\\resources\\";
         String outFolder = "C:\\Users\\Dean\\AppData\\Roaming\\.minecraft\\installations\\1.18.1\\schematics\\";
-
 //        CompoundTag root = nbt.fromFile(new File("src/main/resources/test.litematic"));
         CompoundTag root = nbt.fromFile(new File(String.format("%s%s", inFolder, "menger2.litematic")));
 
@@ -58,7 +58,7 @@ public class CloneAreaTest {
         SchematicArea copyArea = new SchematicArea(2, 2, 2);
         copyArea.addPalette("minecraft:gold_block");
 
-        area.addArea(copyArea, 0, 0, 0, 2, 2, 2);
+        area.addArea(copyArea, 0, 0, 0, 2, 2, 2, 0, 0, 0);
 
 //        area.print();
 //        for (long l: area.createLongArray())

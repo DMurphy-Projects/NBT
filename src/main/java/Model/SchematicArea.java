@@ -104,20 +104,20 @@ public class SchematicArea {
         }
     }
 
-    public void addArea(SchematicArea section, int x, int y ,int z, int w, int h, int l)
+    public void addArea(SchematicArea section, int x, int y ,int z, int w, int h, int l, int tx, int ty, int tz)
     {
-        for (int a=x;a<x+w;a++)
-        for (int b=y;b<y+h;b++)
-        for (int c=z; c<z+l; c++)
+        for (int a=0;a<w;a++)
+        for (int b=0;b<h;b++)
+        for (int c=0; c<l; c++)
         {
-            int pos = section.flatten(a, b, c);
+            int pos = section.flatten(x + a, y + b, z + c);
             int bits = pos * section.digits;
 
             long data = readWithPosition(section.area, bits / 64, bits % 64, section.digits);
             String block = section.blockPaletteInverse.get((int)data);
 
             addPalette(block);
-            addBlock(block, a, b, c);
+            addBlock(block, a + tx, b + ty, c + tz);
         }
     }
 
