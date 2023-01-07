@@ -167,10 +167,9 @@ public class SchematicArea {
         if (split)
         {
             long l1 = readWithPosition(list, baseIndex, pos, (64 - pos));
-            int l2Size = (pos + digits) - 64;
-            long l2 = readWithPosition(list, baseIndex+1, 0, l2Size);
+            long l2 = readWithPosition(list, baseIndex+1, 0, (pos + digits) - 64);
 
-            return (l1 << l2Size) | l2;
+            return (l2 << (64 - pos)) | l1;
         }
         else
         {
