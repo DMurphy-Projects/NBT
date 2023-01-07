@@ -1,5 +1,5 @@
+import Helper.BlockCreator;
 import IO.SchematicFileHandler;
-import IO.SchematicReader;
 import Model.SchematicArea;
 import dev.dewy.nbt.Nbt;
 import dev.dewy.nbt.io.CompressionType;
@@ -51,12 +51,12 @@ public class CloneAreaTest {
         CompoundTag root = nbt.fromFile(new File(String.format("%s%s", inFolder, "menger2.litematic")));
 
         SchematicFileHandler fileHelper = new SchematicFileHandler(root);
-        SchematicArea area = SchematicReader.read(fileHelper);
+        SchematicArea area = fileHelper.createArea();
 
-        area.addPalette("minecraft:gold_block");
+        area.addPalette(BlockCreator.createBasicBlock("minecraft:gold_block"));
 
         SchematicArea copyArea = new SchematicArea(2, 2, 2);
-        copyArea.addPalette("minecraft:gold_block");
+        copyArea.addPalette(BlockCreator.createBasicBlock("minecraft:gold_block"));
 
         area.addArea(copyArea, 0, 0, 0, 2, 2, 2, 0, 0, 0);
 

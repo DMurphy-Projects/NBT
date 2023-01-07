@@ -1,9 +1,9 @@
 package Model;
 
 import Helper.ArrayIndexHelper;
+import dev.dewy.nbt.tags.array.LongArrayTag;
 import dev.dewy.nbt.tags.collection.CompoundTag;
 import dev.dewy.nbt.tags.collection.ListTag;
-import dev.dewy.nbt.tags.primitive.StringTag;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -13,18 +13,13 @@ import java.util.Map;
 public class SchematicArea {
     int xMax, yMax, zMax, totalMax;
 
-    HashMap<String, Integer> blockPalette = new HashMap<String, Integer>();
-    HashMap<Integer, String> blockPaletteInverse = new HashMap<Integer, String>();
+    HashMap<CompoundTag, Integer> blockPalette = new HashMap<CompoundTag, Integer>();
+    HashMap<Integer, CompoundTag> blockPaletteInverse = new HashMap<Integer, CompoundTag>();
     int globalIndex = 0, digits = 2;
 
     List<Long> area;
 
     public SchematicArea(int x, int y, int z)
-    {
-        this(x, y, z, new ArrayList<Long>());
-    }
-
-    public SchematicArea(int x, int y, int z, List<Long> a)
     {
         xMax = x;
         yMax = y;
@@ -32,11 +27,32 @@ public class SchematicArea {
 
         totalMax = x * y * z;
 
-        area = a;
+        area = new ArrayList<Long>();
 
-        initList(area, totalMax, digits, a.size());
+        initList(area,  totalMax, digits, 0);
+    }
 
-        updatePacking();
+    public SchematicArea(int x, int y, int z, LongArrayTag area, ListTag<CompoundTag> palette)
+    {
+        xMax = x;
+        yMax = y;
+        zMax = z;
+
+        totalMax = x * y * z;
+
+        this.area = new ArrayList<Long>();
+        for (Long l: area)
+        {
+            this.area.add(l);
+        }
+
+        for (CompoundTag tag: palette)
+        {
+            addPaletteWithoutUpdate(tag);
+        }
+        digits = calculateDigits();
+
+        initList(this.area, totalMax, digits, area.size());
     }
 
     private void initList(List<Long> list, int max, int digits, int existing)
@@ -66,9 +82,14 @@ public class SchematicArea {
         return ArrayIndexHelper.flatten(x, y, z, xMax, zMax);
     }
 
+    private int calculateDigits()
+    {
+        return (int) (Math.max(2, (Math.log(blockPalette.size()-1) / Math.log(2)) + 1));
+    }
+
     public void updatePacking()
     {
-        int newDigits = (int) (Math.max(2, (Math.log(blockPalette.size()-1) / Math.log(2)) + 1));
+        int newDigits = calculateDigits();
         if (newDigits > digits)
         {
             System.out.println(String.format("Update Packing - %s -> %s, Size: %s", digits, newDigits, blockPalette.size()));
@@ -90,10 +111,9 @@ public class SchematicArea {
         }
     }
 
-    public void addPalette(String s)
+    public void addPalette(CompoundTag s)
     {
-        if (!blockPalette.containsKey(s))
-        {
+        if (!blockPalette.containsKey(s)) {
             System.out.println("Added: " + s);
 
             int i = globalIndex++;
@@ -101,6 +121,17 @@ public class SchematicArea {
             blockPaletteInverse.put(i, s);
 
             updatePacking();
+        }
+    }
+
+    private void addPaletteWithoutUpdate(CompoundTag s)
+    {
+        if (!blockPalette.containsKey(s)) {
+            System.out.println("Added: " + s);
+
+            int i = globalIndex++;
+            blockPalette.put(s, i);
+            blockPaletteInverse.put(i, s);
         }
     }
 
@@ -114,19 +145,19 @@ public class SchematicArea {
             int bits = pos * section.digits;
 
             long data = readWithPosition(section.area, bits / 64, bits % 64, section.digits);
-            String block = section.blockPaletteInverse.get((int)data);
+            CompoundTag block = section.blockPaletteInverse.get((int)data);
 
             addPalette(block);
             addBlock(block, a + tx, b + ty, c + tz);
         }
     }
 
-    public void addBlock(String s, int x, int y, int z)
+    public void addBlock(CompoundTag s, int x, int y, int z)
     {
         addBlock(s, flatten(x, y, z));
     }
 
-    public void addBlock(String s, int pos)
+    public void addBlock(CompoundTag s, int pos)
     {
         addBlock(blockPalette.get(s), pos);
     }
@@ -212,17 +243,15 @@ public class SchematicArea {
     public ListTag<CompoundTag> createBlockStatePalette()
     {
         ListTag<CompoundTag> blockStatePalette = new ListTag<CompoundTag>();
-        String[] orderedArray = new String[blockPalette.size()];
-        for (Map.Entry<String, Integer> s: blockPalette.entrySet())
+        CompoundTag[] orderedArray = new CompoundTag[blockPalette.size()];
+        for (Map.Entry<CompoundTag, Integer> s: blockPalette.entrySet())
         {
             orderedArray[s.getValue()] = s.getKey();
         }
 
-        for (String s: orderedArray)
+        for (CompoundTag s: orderedArray)
         {
-            CompoundTag t = new CompoundTag();
-            t.put(new StringTag("Name", s));
-            blockStatePalette.add(t);
+            blockStatePalette.add(s);
         }
 
         return blockStatePalette;

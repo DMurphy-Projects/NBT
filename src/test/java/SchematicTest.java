@@ -1,5 +1,5 @@
+import Helper.BlockCreator;
 import IO.SchematicFileHandler;
-import IO.SchematicReader;
 import Model.SchematicArea;
 import dev.dewy.nbt.Nbt;
 import dev.dewy.nbt.io.CompressionType;
@@ -16,11 +16,12 @@ public class SchematicTest {
 
         SchematicFileHandler fileHelper = new SchematicFileHandler(root);
 
-        SchematicArea area = SchematicReader.read(fileHelper);
+        SchematicArea area = fileHelper.createArea();
 //        area.print();
     }
 
-    static String air = "minecraft:air", stone = "minecraft:stone";
+    static CompoundTag air = BlockCreator.createBasicBlock("minecraft:air"),
+            stone = BlockCreator.createBasicBlock("minecraft:stone");
     static int menger_order = 5;
     public static SchematicArea createArea()
     {
@@ -28,7 +29,7 @@ public class SchematicTest {
         int size = (int) Math.pow(3, order-1);
 
         SchematicArea area = new SchematicArea(size, size, size);
-        area.addBlock("minecraft:air", 0);
+        area.addBlock(BlockCreator.createBasicBlock("minecraft:air"), 0);
         draw(order, size/2, size/2, size/2, size, area);
 
         return area;
@@ -73,7 +74,7 @@ public class SchematicTest {
         area.addBlock(stone, x, y, z);
     }
 
-    public static void fillCube(int x, int y, int z, int size, SchematicArea area, String block)
+    public static void fillCube(int x, int y, int z, int size, SchematicArea area, CompoundTag block)
     {
         int size_3 = size / 3;
         for (int i=x-size_3;i<size;i++)

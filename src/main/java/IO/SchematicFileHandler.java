@@ -1,5 +1,6 @@
 package IO;
 
+import Model.SchematicArea;
 import dev.dewy.nbt.tags.array.LongArrayTag;
 import dev.dewy.nbt.tags.collection.CompoundTag;
 import dev.dewy.nbt.tags.collection.ListTag;
@@ -23,6 +24,19 @@ public class SchematicFileHandler {
     public SchematicFileHandler(CompoundTag root)
     {
         rdReadRoot(root);
+    }
+
+    public SchematicArea createArea()
+    {
+        SchematicArea area = new SchematicArea(
+                enclosingSize.getInt("x").getValue(),
+                enclosingSize.getInt("y").getValue(),
+                enclosingSize.getInt("z").getValue(),
+                blockStates,
+                blockStatePalette
+        );
+
+        return area;
     }
 
     //modify data
