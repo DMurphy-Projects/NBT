@@ -1,0 +1,3 @@
+[submodule "BytePacking"]
+	path = BytePacking
+	url = https://github.com/DMurphy-Projects/BytePacking
