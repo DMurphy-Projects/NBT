@@ -1,7 +1,3 @@
-import Helper.ArrayIndexHelper;
-
-import java.util.Arrays;
-
 public class BinaryTest {
 
     public static void writeWithPosition(long base, long x, int pos)

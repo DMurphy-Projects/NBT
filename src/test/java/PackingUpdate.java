@@ -18,10 +18,7 @@ public class PackingUpdate {
         for (int i=0;i<blocks.length;i++)
         {
             area.addPalette(blocks[i]);
-            area.addBlock(blocks[i], i * 64);
+            area.addBlock(blocks[i], i, i, i);
         }
-
-        area.print();
-
     }
 }

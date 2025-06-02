@@ -1,66 +1,44 @@
 package Model;
 
 import Helper.ArrayIndexHelper;
+import Helper.BinaryPacker;
+import Helper.Conversion;
 import dev.dewy.nbt.tags.array.LongArrayTag;
 import dev.dewy.nbt.tags.collection.CompoundTag;
 import dev.dewy.nbt.tags.collection.ListTag;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class SchematicArea {
     int xMax, yMax, zMax, totalMax;
 
-    HashMap<CompoundTag, Integer> blockPalette = new HashMap<CompoundTag, Integer>();
-    HashMap<Integer, CompoundTag> blockPaletteInverse = new HashMap<Integer, CompoundTag>();
-    int globalIndex = 0, digits = 2;
-
-    List<Long> area;
+    CompoundTag[][][] area;
+    Set<CompoundTag> blockPalette = new LinkedHashSet<CompoundTag>();
 
     public SchematicArea(int x, int y, int z)
     {
+        area = new CompoundTag[x][y][z];
+
         xMax = x;
         yMax = y;
         zMax = z;
-
-        totalMax = x * y * z;
-
-        area = new ArrayList<Long>();
-
-        initList(area,  totalMax, digits, 0);
+        totalMax = xMax * yMax * zMax;
     }
 
-    public SchematicArea(int x, int y, int z, LongArrayTag area, ListTag<CompoundTag> palette)
+    public SchematicArea(int x, int y, int z, LongArrayTag blockStates, ListTag<CompoundTag> blockPalette)
     {
-        xMax = x;
-        yMax = y;
-        zMax = z;
+        this(x, y, z);
 
-        totalMax = x * y * z;
-
-        this.area = new ArrayList<Long>();
-        for (Long l: area)
+        for (CompoundTag tag: blockPalette)
         {
-            this.area.add(l);
+            addPalette(tag);
         }
 
-        for (CompoundTag tag: palette)
+        int location = 0;
+        BinaryPacker packer = new BinaryPacker(Conversion.BlockStatesToLongArray(blockStates), calculateDigits());
+        while (packer.canRead() && location < totalMax)
         {
-            addPaletteWithoutUpdate(tag);
-        }
-        digits = calculateDigits();
-
-        initList(this.area, totalMax, digits, area.size());
-    }
-
-    private void initList(List<Long> list, int max, int digits, int existing)
-    {
-        int needed = (int) (Math.ceil((max * digits) / 64d) - existing);
-        for (int i=0;i<needed;i++)
-        {
-            list.add(0L);
+            addBlock(blockPalette.get((int) packer.read()), location++);
         }
     }
 
@@ -77,62 +55,24 @@ public class SchematicArea {
         return zMax;
     }
 
-    private int flatten(int x, int y, int z)
-    {
-        return ArrayIndexHelper.flatten(x, y, z, xMax, zMax);
-    }
-
     private int calculateDigits()
     {
         return (int) (Math.max(2, (Math.log(blockPalette.size()-1) / Math.log(2)) + 1));
     }
 
-    public void updatePacking()
+    public void addBlock(CompoundTag tag, int x, int y, int z)
     {
-        int newDigits = calculateDigits();
-        if (newDigits > digits)
-        {
-            System.out.println(String.format("Update Packing - %s -> %s, Size: %s", digits, newDigits, blockPalette.size()));
-
-            List<Long> newArea = new ArrayList<Long>();
-            initList(newArea, totalMax, newDigits, 0);
-
-            for (int i=0;i<totalMax;i++)
-            {
-                int readBits = i * digits;
-                long data = readWithPosition(area, readBits / 64, readBits % 64, digits);
-
-                int writeBits = i * newDigits;
-                writeWithPosition(newArea, writeBits / 64, data, writeBits % 64, newDigits);
-            }
-
-            digits = newDigits;
-            area = newArea;
-        }
+        area[x][y][z] = tag;
     }
 
-    public void addPalette(CompoundTag s)
+    public void addBlock(CompoundTag tag, int pos)
     {
-        if (!blockPalette.containsKey(s)) {
-            System.out.println("Added: " + s);
-
-            int i = globalIndex++;
-            blockPalette.put(s, i);
-            blockPaletteInverse.put(i, s);
-
-            updatePacking();
-        }
+        int[] i = ArrayIndexHelper.unflatten(pos, xMax, zMax);
+        area[i[0]][i[1]][i[2]] = tag;
     }
 
-    private void addPaletteWithoutUpdate(CompoundTag s)
-    {
-        if (!blockPalette.containsKey(s)) {
-            System.out.println("Added: " + s);
-
-            int i = globalIndex++;
-            blockPalette.put(s, i);
-            blockPaletteInverse.put(i, s);
-        }
+    public void addPalette(CompoundTag tag) {
+        blockPalette.add(tag);
     }
 
     public void addArea(SchematicArea section, int x, int y ,int z, int w, int h, int l, int tx, int ty, int tz)
@@ -141,119 +81,65 @@ public class SchematicArea {
         for (int b=0;b<h;b++)
         for (int c=0; c<l; c++)
         {
-            int pos = section.flatten(x + a, y + b, z + c);
-            int bits = pos * section.digits;
+            CompoundTag tag = section.area[x+a][y+b][z+c];
 
-            long data = readWithPosition(section.area, bits / 64, bits % 64, section.digits);
-            CompoundTag block = section.blockPaletteInverse.get((int)data);
-
-            addPalette(block);
-            addBlock(block, a + tx, b + ty, c + tz);
+            addPalette(tag);
+            addBlock(tag, tx+a, ty+b, tz+c);
         }
     }
 
-    public void addBlock(CompoundTag s, int x, int y, int z)
+    private Map<CompoundTag, Integer> createBlockPaletteLookup()
     {
-        addBlock(s, flatten(x, y, z));
-    }
+        Map<CompoundTag, Integer> lookup = new HashMap<CompoundTag, Integer>();
 
-    public void addBlock(CompoundTag s, int pos)
-    {
-        addBlock(blockPalette.get(s), pos);
-    }
-
-    public void addBlock(long data, int pos)
-    {
-        int bits = pos * digits;
-        writeWithPosition(area, bits / 64, data, bits % 64, digits);
-    }
-
-    public void writeWithPosition(List<Long> list, int baseIndex, long x, int pos, int digits)
-    {
-        //writes x starting at pos to the base
-        Long base = list.get(baseIndex);
-        long mask = (1 << digits) - 1;
-
-        boolean split = (pos + digits) > 64;
-        if (split)
-        {
-            long firstHalfMask = (1 << (64 - pos)) - 1;
-            long secondHalfMask = mask - firstHalfMask;
-
-            writeWithPosition(list, baseIndex, x & firstHalfMask, pos, 64 - pos);
-            writeWithPosition(list, baseIndex+1, (x & secondHalfMask) >> (64 - pos), 0, digits - (64 - pos));
+        int index = 0;
+        for (CompoundTag tag : blockPalette) {
+            lookup.put(tag, index++);
         }
-        else {
 
-            long maskValue = (base >> pos) & mask;
-//            System.out.println(base + ((x - maskValue) << pos));
-            list.set(baseIndex, base + ((x - maskValue) << pos));
-        }
-    }
-
-    public long readWithPosition(List<Long> list, int baseIndex, int pos, int digits)
-    {
-        long base = list.get(baseIndex);
-        boolean split = (pos + digits) > 64;
-        if (split)
-        {
-            long l1 = readWithPosition(list, baseIndex, pos, (64 - pos));
-            long l2 = readWithPosition(list, baseIndex+1, 0, (pos + digits) - 64);
-
-            return (l2 << (64 - pos)) | l1;
-        }
-        else
-        {
-            long mask = (1 << digits) - 1;
-            return (base >> pos) & mask;
-        }
-    }
-
-    public int getDataSize()
-    {
-        return area.size();
-    }
-
-    public int getPaletteSize()
-    {
-        return blockPalette.size();
-    }
-
-    public void print() {
-        System.out.println(String.format("Packing: %s", digits));
-
-        for (int i=0;i<totalMax;i++)
-        {
-            int bits = (i * digits);
-            long data = readWithPosition(area, bits / 64, bits % 64, digits);
-            System.out.println(String.format("%s : %s -> %s", i, data, blockPaletteInverse.get((int)data)));
-        }
-    }
-
-    public long[] createLongArray()
-    {
-        long[] arr = new long[area.size()];
-        for (int i=0;i<area.size();i++)
-        {
-            arr[i] = area.get(i);
-        }
-        return arr;
+        return lookup;
     }
 
     public ListTag<CompoundTag> createBlockStatePalette()
     {
         ListTag<CompoundTag> blockStatePalette = new ListTag<CompoundTag>();
-        CompoundTag[] orderedArray = new CompoundTag[blockPalette.size()];
-        for (Map.Entry<CompoundTag, Integer> s: blockPalette.entrySet())
-        {
-            orderedArray[s.getValue()] = s.getKey();
-        }
-
-        for (CompoundTag s: orderedArray)
+        for (CompoundTag s: blockPalette)
         {
             blockStatePalette.add(s);
         }
-
         return blockStatePalette;
+    }
+
+    public long[] createLongArray()
+    {
+        int digits = calculateDigits();
+        BinaryPacker packer = new BinaryPacker((int) Math.ceil((double)(totalMax * digits) / 64d), digits);
+
+        Map<CompoundTag, Integer> lookup = createBlockPaletteLookup();
+
+        //should iterate x->z->y
+        for (int i=0;i<yMax;i++)
+        {
+            for (int j=0;j<zMax;j++)
+            {
+                for (int k=0;k<xMax;k++)
+                {
+                    packer.write(lookup.get(area[k][i][j]));
+                }
+            }
+        }
+
+        return packer.getRawData();
+    }
+
+    public void printArea(int height)
+    {
+        for (int i=0;i<xMax;i++)
+        {
+            for (int j=0;j<zMax;j++)
+            {
+                System.out.println(String.format("%s %s %s", area[i][height][j], i, j));
+            }
+        }
     }
 }

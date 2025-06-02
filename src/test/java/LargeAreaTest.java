@@ -1,3 +1,4 @@
+import Helper.BinaryPacker;
 import Helper.BlockCreator;
 import IO.SchematicFileHandler;
 import Model.SchematicArea;
@@ -46,10 +47,8 @@ public class LargeAreaTest {
 
         //origin marker
         area.addPalette(BlockCreator.createBasicBlock("minecraft:white_concrete"));
-        area.addBlock(BlockCreator.createBasicBlock("minecraft:white_concrete"), 0);
+        area.addBlock(BlockCreator.createBasicBlock("minecraft:white_concrete"), 0, 0, 0);
 
-//        area.print();
-//
         CloneAreaTest.write(String.format("%s%s", outFolder, "cloneTest.litematic"), new Nbt(), area);
     }
 }

@@ -29,7 +29,7 @@ public class SchematicTest {
         int size = (int) Math.pow(3, order-1);
 
         SchematicArea area = new SchematicArea(size, size, size);
-        area.addBlock(BlockCreator.createBasicBlock("minecraft:air"), 0);
+        area.addBlock(BlockCreator.createBasicBlock("minecraft:air"), 0, 0, 0);
         draw(order, size/2, size/2, size/2, size, area);
 
         return area;
